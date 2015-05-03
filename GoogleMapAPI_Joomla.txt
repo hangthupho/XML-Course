@@ -1,0 +1,337 @@
+<html><head>
+    <meta name="viewport" content="initial-scale=1.0, user-scalable=no">
+    <meta charset="utf-8">
+    <script src="https://maps.googleapis.com/maps/api/js?v=3.exp&signed_in=true"></script>
+    <script src="//maps.googleapis.com/maps/api/js?v=3.exp&sensor=true"></script>
+    <style>
+      #map-canvas {
+        width: 700px;
+        height: 500px;
+      }
+	  .displayText {
+		  font-family: "Palatino Linotype", "Book Antiqua", Palatino, serif;
+		  font-size:16px;
+		  line-height:170%;
+	  }
+	  .searchForm {
+	  	  font-family: "Palatino Linotype", "Book Antiqua", Palatino, serif;
+		  font-size:16px;
+		  line-height:170%;		  
+	  }
+	  .findPos { 
+	  	  font-family: "Palatino Linotype", "Book Antiqua", Palatino, serif;
+		  font-size:14px;
+		  color:#33F;
+		  text-decoration:underline
+	  }
+	  #loading-image {
+  		  position: absolute;
+	  }
+    </style>
+<script>
+//============================================================================
+//	REFERENCES:																
+//	  http://stackoverflow.com/												
+//    https://developers.google.com/maps/documentation/javascript/tutorial	
+//    http://www.geocodezip.com												
+//	  http://econym.org.uk/gmap/											
+//============================================================================
+//============================================================================
+//	- Find Latitide and Longtitude of Denmark:								
+//	  http://www.latlong.net/convert-address-to-lat-long.html				
+//    ---> The latitude and longitude of Denmark is: 56.263920, 9.501785.	
+//  - Double check on WorldAtlas:											
+//	  http://www.worldatlas.com/aatlas/latitude_and_longitude_finder.htm	
+//	  ---> The latitude and longitude of Denmark is: 56° 15' N / 9° 30' E	
+//============================================================================
+
+var map;
+var marker;
+var geocoder;
+var clickOnMap;
+var clearAllText = false;
+var findPos;
+var clickOnSearch;
+var initAdd = false;
+
+google.maps.event.addDomListener(window, 'load', initialize);
+
+var infowindow = new google.maps.InfoWindow(
+  { 
+    size: new google.maps.Size(150,50)
+  });
+ 
+//===================================================================
+// Place a marker on Google Map, either by clicking on Map or
+// entering address on textboxes.
+//===================================================================
+function placeMarker(location) {
+	if(initAdd == true) contentString = "<b>Restaurant's address:</b><br>"+ location;
+	else contentString = "<b>Marked location:</b><br>"+ location;
+
+	document.getElementById('results').innerHTML = null;
+	if(clickOnMap == true)
+	{
+		document.getElementById('streetname').value = null;
+		document.getElementById('housenum').value = null;
+		document.getElementById('postnum').value = null;
+	}
+    if (marker) {
+        //if marker already was created change positon
+        marker.setPosition(location);
+		map.setCenter(location);
+    } else {
+        //create a marker
+        marker = new google.maps.Marker({          
+            position: location,
+            map: map,
+            draggable: true
+        });
+    }
+	google.maps.event.addListener(marker, 'click', function() {
+        initAdd = false;
+    	infowindow.setContent(contentString); 
+    	infowindow.open(map,marker);
+    });
+    google.maps.event.trigger(marker, 'click');    
+    return marker;
+}
+//===================================================================
+// Load the map of Denmark based on latitude and longtitude.
+//===================================================================
+function initialize() {
+  clickOnMap = false;
+  findPos = false;
+  clickOnSearch = false;
+  initAdd = true;
+  
+  geocoder = new google.maps.Geocoder();
+  var latlng = new google.maps.LatLng(56.263920, 9.501785); 
+  var mapOptions = {
+    zoom: 7,
+    center: latlng
+  }
+  map = new google.maps.Map(document.getElementById('map-canvas'), mapOptions);
+
+  //place the marker at the restaurant's address on initialization
+  var reslatLng = new google.maps.LatLng(55.747519, 12.38018); 
+  placeMarker(reslatLng);
+
+  google.maps.event.addListener(map, 'click', function (evt) {
+	  	clickOnMap = true;
+		findPos = false;
+		clickOnSearch = false;
+                placeMarker(evt.latLng);
+		reverseGeocoding(evt.latLng,findPos);
+    });
+}
+//===================================================================
+// Reverse latitude and longtitude of a location to a readble address
+//===================================================================
+function reverseGeocoding(latlng, findPos) {
+city = null; 
+county = null;
+region = null;
+country = null;
+msgStr = null;
+
+if(findPos == true) {
+	msgStr = "Your current position is: ";
+	
+} else {
+	msgStr = "You have added or moved the marker to the position: ";
+}
+if(clickOnSearch == true) {
+	msgStr = "You have searched for the address: ";
+}
+
+geocoder.geocode({'location':latlng}, function(addresses, status) {
+  if (status == google.maps.GeocoderStatus.OK) {
+    if (addresses[0]) {
+        for (var i=0; i<addresses[0].address_components.length; i++) {
+        for (var b=0;b<addresses[0].address_components[i].types.length;b++) {
+			//Find region or commune name
+            if (addresses[0].address_components[i].types[b] == "administrative_area_level_1") {
+                region= addresses[0].address_components[i];
+                break;
+            } 
+			//Find city name
+			if (addresses[0].address_components[i].types[b] == "administrative_area_level_2") {
+                city= addresses[0].address_components[i];
+                break;
+            } 
+			//Find country name
+			if (addresses[0].address_components[i].types[b] == "country") {
+                country= addresses[0].address_components[i];
+                break;
+            }
+        }
+    }
+		if(country.long_name != "Denmark") {
+			msgStr = "Note that this location does not belong to Denmark.";
+			document.getElementById('results').innerHTML = "<i>" + "<font color=brown>" + msgStr + "</font>" + "</i>" + "<br>" + "<b>" +
+													"Address: " + "</b>" + addresses[0].formatted_address+"<br>"; 
+    		if (city) document.getElementById('results').innerHTML += "<b>" +"City: " + "</b>" + city.short_name+"<br>";
+			if (region) document.getElementById('results').innerHTML += "<b>" +"Region: " + "</b>" + region.long_name +"<br>";
+
+		} else {
+			//Full formatted address
+    		document.getElementById('results').innerHTML += "<i>" + "<font color=brown>" + msgStr + "</font>" + "</i>" + "<br>" + "<b>" +  
+													"Address: " + "</b>" + addresses[0].formatted_address+"<br>";
+    		if (city) document.getElementById('results').innerHTML += "<b>" +"City: " + "</b>" + city.short_name+"<br>";
+			if (region) document.getElementById('results').innerHTML += "<b>" +"Region: " + "</b>" + region.long_name +"<br>";
+		}
+    } else {
+      	alert("No results found");
+    }
+  } else {
+    alert("Geocoder failed due to: " + status);
+  }
+ });
+}
+//======================================================================
+// Convert an address to its latutude and longtitude in decimal degrees.
+//======================================================================
+function codeAddress() {
+	clickOnMap = false;
+	findPos = false;
+	clickOnSearch = true;
+        initAdd = false;
+	
+	if(clearAllText == false) {
+  		if(document.getElementById('streetname').value == "") {
+	  		document.getElementById('results').innerHTML = null;
+	  		alert("Please enter the address to search...");
+  		} else {
+			if(document.getElementById('housenum').value == "") {
+	  			document.getElementById('results').innerHTML = null;
+	  			alert("To get a better searching result, please enter a house number or building number...");
+			} else {
+  				var street = document.getElementById('streetname').value;
+  				var house = document.getElementById('housenum').value;
+  				var post = document.getElementById('postnum').value;
+  				var address = street + " " + house + " " + post + ", " + "Denmark";
+  
+  				geocoder.geocode( { 'address': address}, function(results, status) {
+    			 if (status == google.maps.GeocoderStatus.OK) {
+      				map.setCenter(results[0].geometry.location);
+	  				placeMarker(results[0].geometry.location);
+					reverseGeocoding(results[0].geometry.location, findPos);
+    			 } else {
+      				alert('Geocode was not successful for the following reason: ' + status);
+     			 }
+  	  	 		});
+			}
+		}
+	}
+ }
+//===================================================================
+// Locate the user's current position.
+//===================================================================
+function findUserPosition()
+{
+	findPos = true;
+	clickOnMap = false;
+	clickOnSearch = false;
+        initAdd = false;
+
+	document.getElementById('results').innerHTML = "<i>" + "<font color=brown>" + "Locating your current position..." + "</font>" + "</i>";
+	
+	if(navigator.geolocation) {
+    	navigator.geolocation.getCurrentPosition(function(position) {
+      	var pos = new google.maps.LatLng(position.coords.latitude, position.coords.longitude);
+		reverseGeocoding(pos,findPos);
+		placeMarker(pos);
+    	}, function() {
+      	handleNoGeolocation(true);
+    });
+  } else {
+    // Browser doesn't support Geolocation
+    handleNoGeolocation(false);
+  }
+}
+//===================================================================
+// Report an error message if no location found.
+//===================================================================
+function handleNoGeolocation(errorFlag) {
+  if (errorFlag) {
+    var content = 'Error: The Geolocation service failed.';
+  } else {
+    var content = 'Error: Your browser doesn\'t support geolocation.';
+  }
+
+  var options = {
+    map: map,
+    position: new google.maps.LatLng(60, 105),
+    content: content
+  };
+
+  var infowindow = new google.maps.InfoWindow(options);
+  map.setCenter(options.position);
+}
+//===================================================================
+</script>
+</head>
+  
+<body>
+<table cellpadding="10">
+<tbody>
+<tr>
+<td>
+<div id="map-canvas"></div>
+</td>
+<td>
+<p><img src="images/icethumbs/siteimages/restaurant_thum.png" alt="" /> </p> 
+<p><strong>Address: </strong></p>
+<p> 
+Egebjerg Bygade 227 <br/>
+2750 Ballerup <br/>
+Denmark <br/>
+Tel: +45 12345678 <br/>
+Email: info@vietnaminabox.dk <br/>
+</p>
+</td>
+</tr>
+</tbody>
+</table>
+<hr/>
+<h4 style="font-family: 'Palatino Linotype', 'Book Antiqua', Palatino, serif;">Search address in Denmark:</h4>
+<p style="font-family: 'Palatino Linotype', 'Book Antiqua', Palatino, serif; font-size: 16px; color: #666;"><i>(search within Denmark by default)</i></p>
+<table border="1" cellpadding="20" bordercolor="#CCCCCC">
+<tbody>
+<tr>
+<td>
+<table style="font-family: Tahoma, Helvetica, Arial, sans-serif; font-size: 12px; height: 175px;" width="340">
+<tbody>
+<tr>
+<td> Street Name:      </td>
+<td> <input id="streetname" name="streetname" type="text" /></td>
+</tr>
+<tr>
+<td> House Number:      </td>
+<td> <input id="housenum" name="housenum" type="text" /></td>
+</tr>
+<tr>
+<td> Post Number:      </td>
+<td> <input id="postnum" name="postnum" type="text" /></td>
+</tr>
+<tr>
+<td> </td>
+<td align="center"><input id="search" type="button" value="Search address"  onclick="codeAddress();"/> </td>
+</tr>
+<tr>
+<td> </td>
+<td align="center">
+<div class="findPos" onclick="findUserPosition()" style="cursor: pointer;">Find your current position</div>
+</td>
+</tr>
+</tbody>
+</table>
+</td>
+<td><div class="displayText" id="results" style="width:400px; height:500; text-align:left; overflow:hidden"></div> </td>
+</tr>
+</tbody>
+</table>
+<p> </p>
+</body>
+</html>
